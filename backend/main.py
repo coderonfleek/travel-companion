@@ -15,6 +15,10 @@ from pydantic import BaseModel
 from typing import List, Optional
 import json
 
+# Image Processing
+from PIL import Image
+import io
+
 # Load environment variables
 load_dotenv()
 
@@ -112,6 +116,80 @@ async def suggest_by_location(request: LocationRequest):
     except Exception as e:
             raise HTTPException(status_code=500, detail=f"Error generating suggestions: {str(e)}")
 
+@app.post("/api/suggest-by-image")
+async def suggest_by_image(
+    file: UploadFile = File(...),
+    preferences: Optional[str] = None
+):
+    """
+    Generate travel suggestions based on an uploaded landmark image
+    """
+     
+    try:
+        # Read and process the uploaded image
+        image_data = await file.read()
+        image = Image.open(io.BytesIO(image_data))
+
+        # Parse preferences if provided
+        pref_list = []
+        if preferences:
+            pref_list = [p.strip() for p in preferences.split(",")]
+                
+        preferences_text = ""
+        if pref_list:
+            preferences_text = f"\nUser preferences: {', '.join(pref_list)}"
+
+        prompt = f"""Analyze this landmark or travel image and suggest 5 similar travel destinations with comparable features, architecture, or atmosphere.
+{preferences_text}
+
+For each destination, provide:
+1. Name of the destination
+2. Brief description explaining similarity to the image (2-3 sentences)
+3. Best time to visit
+4. Main attractions (list 3)
+5. Estimated budget level (Budget/Moderate/Luxury)
+
+Format your response as a JSON array with this structure:
+[
+  {{
+    "name": "Destination Name",
+    "description": "Brief description",
+    "best_time": "Best time to visit",
+    "attractions": ["Attraction 1", "Attraction 2", "Attraction 3"],
+    "budget_level": "Budget/Moderate/Luxury"
+  }}
+]
+
+Only return the JSON array, no additional text."""
+        
+        # Generate content with image
+        response = genai_client.models.generate_content(
+            model=GEMINI_MODEL, 
+            contents = [prompt, image]
+        )
+
+        # Parse response
+        response_text = response.text.strip()
+                
+        # Clean up markdown code blocks
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+                
+        response_text = response_text.strip()
+
+        # Parse JSON
+        destinations = json.loads(response_text)
+                
+        return {"destinations": destinations}
+        
+
+    except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Error processing image: {str(e)}")
+	
 
 if __name__ == "__main__":
     import uvicorn

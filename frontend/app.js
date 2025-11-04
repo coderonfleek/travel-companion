@@ -223,6 +223,8 @@ function displayWeather(data, destination) {
     weatherContent.innerHTML = weatherHTML;
 }
 
+
+
 /**
  * Initialize app
  */
@@ -236,11 +238,97 @@ document.addEventListener('DOMContentLoaded', function() {
  * Handle location form submission
  */
 
+locationForm.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+	const location = document.getElementById('locationInput').value.trim();
+    const preferences = getSelectedPreferences(preferenceCheckboxes);
+
+    if (!location) {
+       showToast('Please enter a location', 'warning');
+       return;
+    }
+    
+    showLoading();
+
+    try {
+
+        const response = await fetch(`${API_BASE_URL}/api/suggest-by-location`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    location: location,
+                    preferences: preferences
+                })
+        });
+                
+        if (!response.ok) {
+            throw new Error('Failed to fetch suggestions');
+        }
+                
+        const data = await response.json();
+        hideLoading();
+        displaySuggestions(data.destinations);
+    } catch (error) {
+        hideLoading();
+        console.error('Error:', error);
+        showToast('Error fetching travel suggestions. Please try again.', 'danger');
+    }
+})
+
 
 /**
  * Integration Task 2:
  * Handle image form submission
  */
+
+imageForm.addEventListener('submit', async function(e) {
+
+    e.preventDefault();
+    
+    const file = imageInput.files[0];
+    const preferences = getSelectedPreferences(imagePreferenceCheckboxes);
+        
+    if (!file) {
+        showToast('Please select an image', 'warning');
+        return;
+    }
+
+    showLoading();
+
+    try {
+
+        const formData = new FormData();
+        formData.append('file', file);
+                
+        // Add preferences as a comma-separated string
+        if (preferences.length > 0) {
+            formData.append('preferences', preferences.join(','));
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/suggest-by-image`, {
+                method: 'POST',
+                body: formData
+        });
+
+        if (!response.ok) {
+                throw new Error('Failed to process image');
+        }
+                
+        const data = await response.json();
+        hideLoading();
+        displaySuggestions(data.destinations);
+
+    } catch (error) {
+
+        hideLoading();
+        console.error('Error:', error);
+        showToast('Error processing image. Please try again.', 'danger');
+    }
+
+})
 
 
 /**
@@ -248,3 +336,4 @@ document.addEventListener('DOMContentLoaded', function() {
  * Get weather information for a destination
  * This function is called from the onclick attribute in the HTML
  */
+
